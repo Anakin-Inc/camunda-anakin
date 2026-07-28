@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>io.anakin</groupId>
+  <artifactId>camunda-anakin</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+
+  <name>camunda-anakin</name>
+  <description>
+    Camunda 8 Outbound Connectors for the Anakin API (https://anakin.io) --
+    URL scraping, AI-powered search, and multi-stage agentic research.
+  </description>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <!-- Matches the real camunda/connector-template-outbound repo (fetched
+         2026-07-28): Java 21 is the compiler target for the current
+         Connector SDK generation (8.9.x / 8.10.x). -->
+    <maven.compiler.release>21</maven.compiler.release>
+
+    <!-- Latest STABLE (non-alpha) release available on Maven Central at
+         the time of writing, confirmed via
+         repo1.maven.org/maven2/io/camunda/connector/connector-core/maven-metadata.xml
+         (8.9.6; 8.10.0-alpha3 also exists but is a pre-release). -->
+    <version.connectors>8.9.6</version.connectors>
+    <version.junit-jupiter>6.1.2</version.junit-jupiter>
+    <version.assertj>3.27.7</version.assertj>
+    <version.mockito>5.23.0</version.mockito>
+  </properties>
+
+  <dependencies>
+    <!-- Connector SDK core: OutboundConnectorFunction, OutboundConnectorContext,
+         ConnectorException / ConnectorRetryException, @OutboundConnector.
+         "provided": the Connector Runtime that loads this jar already ships
+         this on its classpath — shipping a second copy inside our jar would
+         create classloader conflicts. Verified via `mvn dependency:tree`
+         that connector-core does NOT transitively expose Jackson or SLF4J
+         to consumers (it depends on them "provided" internally too, which
+         Maven excludes from the transitive graph entirely — unlike
+         connector-validation below, which depends on hibernate-validator
+         etc. as plain "compile" internally, so those DO flow through,
+         downgraded to "provided"). That is why jackson-databind and
+         slf4j-api are declared explicitly further down. slf4j-api is
+         pinned to the exact version connector-runtime-test resolves
+         (2.0.18); jackson-databind is pinned one minor version below what
+         connector-object-mapper resolves (2.21.4, not 2.22.0) to avoid a
+         real upstream version conflict inside that same test-scope
+         dependency graph — see the dependency declaration below and
+         SUBMIT.md for the full story (a real ServiceConfigurationError was
+         hit and diagnosed, not a preemptive guess). -->
+    <dependency>
+      <groupId>io.camunda.connector</groupId>
+      <artifactId>connector-core</artifactId>
+      <version>${version.connectors}</version>
+      <scope>provided</scope>
+    </dependency>
+
+    <!-- Jakarta Bean Validation support (@NotEmpty/@NotNull on the request
+         records below) plus DefaultValidationProvider, used by
+         OutboundConnectorContext#bindVariables(...) and by the test-only
+         OutboundConnectorContextBuilder. Also "provided" — supplied by the
+         Connector Runtime. -->
+    <dependency>
+      <groupId>io.camunda.connector</groupId>
+      <artifactId>connector-validation</artifactId>
+      <version>${version.connectors}</version>
+      <scope>provided</scope>
+    </dependency>
+
+    <!-- @TemplateProperty / @ElementTemplate annotations read by the
+         element-template-generator-maven-plugin at build time. Compile-time
+         only — never needed at runtime, so "provided" here too. -->
+    <dependency>
+      <groupId>io.camunda.connector</groupId>
+      <artifactId>element-template-generator-annotations</artifactId>
+      <version>${version.connectors}</version>
+      <scope>provided</scope>
+    </dependency>
+
+    <!-- Test-only: OutboundConnectorContextBuilder, the SDK's own fluent
+         builder for a real (non-mock) OutboundConnectorContext — used by
+         the connector-level tests to exercise bindVariables(), secret
+         substitution ({{secrets.*}}), and Bean Validation exactly as the
+         real Connector Runtime would. -->
+    <dependency>
+      <groupId>io.camunda.connector</groupId>
+      <artifactId>connector-runtime-test</artifactId>
+      <version>${version.connectors}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- Used by AnakinApiClient for the Anakin API's request/response JSON.
+         "provided": the Connector Runtime's own internals already depend on
+         Jackson — shipping a second copy would risk a classpath conflict,
+         and connector-core does not re-export it (see note above).
+
+         Version 2.21.4, NOT connector-object-mapper's own 2.22.0, and this
+         was found the hard way: `mvn test` first with 2.22.0 pinned here
+         made every connector-level test fail with a real, upstream
+         ServiceConfigurationError — io.camunda.connector.runtime.core.
+         intrinsic.functions.GetJsonFunction (loaded via ServiceLoader
+         inside OutboundConnectorContextBuilder) constructs a FEEL engine
+         whose transitive `jackson-module-scala:2.21.1` refuses to register
+         against jackson-databind >= 2.22.0 ("Scala module 2.21.1 requires
+         Jackson Databind version >= 2.21.0 and < 2.22.0"). That is a real
+         version inconsistency inside connector-runtime-test 8.9.6's own
+         transitive graph (feel-engine 1.21.0 vs connector-object-mapper),
+         not something invented here. 2.21.4 satisfies feel-engine's range
+         and is itself already present elsewhere in that same graph
+         (jackson-dataformat-yaml:2.21.4, confirmed via `mvn dependency:
+         tree`), so it is a real, already-in-use, internally-consistent
+         choice, not an arbitrary downgrade. -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <version>2.21.4</version>
+      <scope>provided</scope>
+    </dependency>
+
+    <!-- Logging facade used by AnakinApiClient and the three connector
+         functions. "provided" for the same reason — the Connector Runtime
+         ships an SLF4J binding already. Version pinned to what connector-
+         runtime-test resolves (slf4j-api 2.0.18). -->
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+      <version>2.0.18</version>
+      <scope>provided</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>${version.junit-jupiter}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.assertj</groupId>
+      <artifactId>assertj-core</artifactId>
+      <version>${version.assertj}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-core</artifactId>
+      <version>${version.mockito}</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <finalName>${project.artifactId}-${project.version}</finalName>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.5.2</version>
+      </plugin>
+
+      <!-- Uber/fat jar for deployment into a Connector Runtime (self-managed
+           Docker image built FROM camunda/connectors-bundle, or the
+           Spring Boot connector-runtime starter). connector-core,
+           connector-validation, and element-template-generator-annotations
+           are all "provided" above, so the shade plugin correctly leaves
+           them out — only third-party runtime deps this connector itself
+           needs (currently none beyond the JDK's own java.net.http; the
+           explicitly-provided jackson-databind/slf4j-api above are also
+           left out, matching the real Connector Runtime's own copies)
+           would be bundled. Mirrors
+           the real connector-template-outbound repo's build (confirmed via
+           its pom.xml: maven-shade-plugin bound to the package phase, goal
+           shade). -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>3.6.2</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Regenerates element-templates/*.json from the @ElementTemplate /
+           @TemplateProperty annotations on each connector below. Per the
+           real template repo's README: "do not edit [these files] by
+           hand" — they are build output, checked in for convenience so a
+           Modeler user can pull them without running Maven. -->
+      <plugin>
+        <groupId>io.camunda.connector</groupId>
+        <artifactId>element-template-generator-maven-plugin</artifactId>
+        <version>${version.connectors}</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>generate-templates</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <connectors>
+            <connector>
+              <connectorClass>io.anakin.camunda.UrlScraperConnectorFunction</connectorClass>
+              <files>
+                <file>
+                  <templateId>io.anakin.connector.UrlScraper.v1</templateId>
+                  <templateFileName>anakin-url-scraper.json</templateFileName>
+                </file>
+              </files>
+            </connector>
+            <connector>
+              <connectorClass>io.anakin.camunda.SearchConnectorFunction</connectorClass>
+              <files>
+                <file>
+                  <templateId>io.anakin.connector.Search.v1</templateId>
+                  <templateFileName>anakin-search.json</templateFileName>
+                </file>
+              </files>
+            </connector>
+            <connector>
+              <connectorClass>io.anakin.camunda.AgenticSearchConnectorFunction</connectorClass>
+              <files>
+                <file>
+                  <templateId>io.anakin.connector.AgenticSearch.v1</templateId>
+                  <templateFileName>anakin-agentic-search.json</templateFileName>
+                </file>
+              </files>
+            </connector>
+          </connectors>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>
