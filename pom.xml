@@ -12,7 +12,10 @@
   <name>camunda-anakin</name>
   <description>
     Camunda 8 Outbound Connectors for the Anakin API (https://anakin.io) --
-    URL scraping, AI-powered search, and multi-stage agentic research.
+    web scraping/crawling/mapping, AI-powered search, multi-stage agentic
+    research, Wire site automation, website change monitoring, AI-visibility
+    comparison, browser sessions, and AI browser automation: all 21 of
+    Anakin's REST API capabilities.
   </description>
 
   <properties>
@@ -239,6 +242,168 @@
                 <file>
                   <templateId>io.anakin.connector.AgenticSearch.v1</templateId>
                   <templateFileName>anakin-agentic-search.json</templateFileName>
+                </file>
+              </files>
+            </connector>
+            <connector>
+              <connectorClass>io.anakin.camunda.MapConnectorFunction</connectorClass>
+              <files>
+                <file>
+                  <templateId>io.anakin.connector.Map.v1</templateId>
+                  <templateFileName>anakin-map.json</templateFileName>
+                </file>
+              </files>
+            </connector>
+            <connector>
+              <connectorClass>io.anakin.camunda.CrawlConnectorFunction</connectorClass>
+              <files>
+                <file>
+                  <templateId>io.anakin.connector.Crawl.v1</templateId>
+                  <templateFileName>anakin-crawl.json</templateFileName>
+                </file>
+              </files>
+            </connector>
+            <connector>
+              <connectorClass>io.anakin.camunda.WireDiscoverConnectorFunction</connectorClass>
+              <files>
+                <file>
+                  <templateId>io.anakin.connector.WireDiscover.v1</templateId>
+                  <templateFileName>anakin-wire-discover.json</templateFileName>
+                </file>
+              </files>
+            </connector>
+            <connector>
+              <connectorClass>io.anakin.camunda.WireCatalogConnectorFunction</connectorClass>
+              <files>
+                <file>
+                  <templateId>io.anakin.connector.WireCatalog.v1</templateId>
+                  <templateFileName>anakin-wire-catalog.json</templateFileName>
+                </file>
+              </files>
+            </connector>
+            <connector>
+              <connectorClass>io.anakin.camunda.WireReadActionConnectorFunction</connectorClass>
+              <files>
+                <file>
+                  <templateId>io.anakin.connector.WireReadAction.v1</templateId>
+                  <templateFileName>anakin-wire-read-action.json</templateFileName>
+                </file>
+              </files>
+            </connector>
+            <connector>
+              <connectorClass>io.anakin.camunda.WireWriteActionConnectorFunction</connectorClass>
+              <files>
+                <file>
+                  <templateId>io.anakin.connector.WireWriteAction.v1</templateId>
+                  <templateFileName>anakin-wire-write-action.json</templateFileName>
+                </file>
+              </files>
+            </connector>
+            <connector>
+              <connectorClass>io.anakin.camunda.WireIdentitiesConnectorFunction</connectorClass>
+              <files>
+                <file>
+                  <templateId>io.anakin.connector.WireIdentities.v1</templateId>
+                  <templateFileName>anakin-wire-identities.json</templateFileName>
+                </file>
+              </files>
+            </connector>
+            <connector>
+              <connectorClass>io.anakin.camunda.WireLoginConnectorFunction</connectorClass>
+              <files>
+                <file>
+                  <templateId>io.anakin.connector.WireLogin.v1</templateId>
+                  <templateFileName>anakin-wire-login.json</templateFileName>
+                </file>
+              </files>
+            </connector>
+            <connector>
+              <connectorClass>io.anakin.camunda.WireBuildConnectorFunction</connectorClass>
+              <files>
+                <file>
+                  <templateId>io.anakin.connector.WireBuild.v1</templateId>
+                  <templateFileName>anakin-wire-build.json</templateFileName>
+                </file>
+              </files>
+            </connector>
+            <connector>
+              <connectorClass>io.anakin.camunda.MonitorCreateConnectorFunction</connectorClass>
+              <files>
+                <file>
+                  <templateId>io.anakin.connector.MonitorCreate.v1</templateId>
+                  <templateFileName>anakin-monitor-create.json</templateFileName>
+                </file>
+              </files>
+            </connector>
+            <connector>
+              <connectorClass>io.anakin.camunda.MonitorListConnectorFunction</connectorClass>
+              <files>
+                <file>
+                  <templateId>io.anakin.connector.MonitorList.v1</templateId>
+                  <templateFileName>anakin-monitor-list.json</templateFileName>
+                </file>
+              </files>
+            </connector>
+            <connector>
+              <connectorClass>io.anakin.camunda.MonitorChangesConnectorFunction</connectorClass>
+              <files>
+                <file>
+                  <templateId>io.anakin.connector.MonitorChanges.v1</templateId>
+                  <templateFileName>anakin-monitor-changes.json</templateFileName>
+                </file>
+              </files>
+            </connector>
+            <connector>
+              <connectorClass>io.anakin.camunda.MonitorControlConnectorFunction</connectorClass>
+              <files>
+                <file>
+                  <templateId>io.anakin.connector.MonitorControl.v1</templateId>
+                  <templateFileName>anakin-monitor-control.json</templateFileName>
+                </file>
+              </files>
+            </connector>
+            <connector>
+              <connectorClass>io.anakin.camunda.AiVisibilitySearchConnectorFunction</connectorClass>
+              <files>
+                <file>
+                  <templateId>io.anakin.connector.AiVisibilitySearch.v1</templateId>
+                  <templateFileName>anakin-ai-visibility-search.json</templateFileName>
+                </file>
+              </files>
+            </connector>
+            <connector>
+              <connectorClass>io.anakin.camunda.AiVisibilitySourcesConnectorFunction</connectorClass>
+              <files>
+                <file>
+                  <templateId>io.anakin.connector.AiVisibilitySources.v1</templateId>
+                  <templateFileName>anakin-ai-visibility-sources.json</templateFileName>
+                </file>
+              </files>
+            </connector>
+            <connector>
+              <connectorClass>io.anakin.camunda.SessionListConnectorFunction</connectorClass>
+              <files>
+                <file>
+                  <templateId>io.anakin.connector.SessionList.v1</templateId>
+                  <templateFileName>anakin-session-list.json</templateFileName>
+                </file>
+              </files>
+            </connector>
+            <connector>
+              <connectorClass>io.anakin.camunda.SessionDeleteConnectorFunction</connectorClass>
+              <files>
+                <file>
+                  <templateId>io.anakin.connector.SessionDelete.v1</templateId>
+                  <templateFileName>anakin-session-delete.json</templateFileName>
+                </file>
+              </files>
+            </connector>
+            <connector>
+              <connectorClass>io.anakin.camunda.BrowserTaskConnectorFunction</connectorClass>
+              <files>
+                <file>
+                  <templateId>io.anakin.connector.BrowserTask.v1</templateId>
+                  <templateFileName>anakin-browser-task.json</templateFileName>
                 </file>
               </files>
             </connector>

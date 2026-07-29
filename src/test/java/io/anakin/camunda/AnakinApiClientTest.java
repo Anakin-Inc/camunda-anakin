@@ -7,6 +7,8 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.http.HttpClient;
+import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -160,6 +162,86 @@ class AnakinApiClientTest {
     AnakinApiClient client = new AnakinApiClient("test-key", baseUrl, HttpClient.newHttpClient());
     Map<String, Object> response = client.get("/search");
     assertThat(response.get("id")).isEqualTo("x");
+  }
+
+  @Test
+  void deleteSendsApiKeyHeaderAndReturnsParsedJson() throws Exception {
+    server.createContext("/sessions/sess-1", exchange -> {
+      assertThat(exchange.getRequestMethod()).isEqualTo("DELETE");
+      assertThat(exchange.getRequestHeaders().getFirst("X-API-Key")).isEqualTo("test-key");
+      writeJson(exchange, 200, "{\"deleted\":true}");
+    });
+    server.start();
+
+    AnakinApiClient client = new AnakinApiClient("test-key", baseUrl);
+    Map<String, Object> response = client.delete("/sessions/sess-1");
+
+    assertThat(response.get("deleted")).isEqualTo(true);
+  }
+
+  @Test
+  void withQueryAppendsAndEncodesNonEmptyParams() {
+    Map<String, String> params = new LinkedHashMap<>();
+    params.put("q", "top phones");
+    params.put("limit", "5");
+    params.put("skip", "");
+    params.put("missing", null);
+
+    assertThat(AnakinApiClient.withQuery("/wire/resolve", params))
+        .isEqualTo("/wire/resolve?q=top+phones&limit=5");
+  }
+
+  @Test
+  void withQueryReturnsBarePathWhenAllParamsEmpty() {
+    Map<String, String> params = new LinkedHashMap<>();
+    params.put("domain", null);
+
+    assertThat(AnakinApiClient.withQuery("/sessions", params)).isEqualTo("/sessions");
+  }
+
+  @Test
+  void encodePathSegmentEncodesSpacesAsPercent20NotPlus() {
+    assertThat(AnakinApiClient.encodePathSegment("my monitor")).isEqualTo("my%20monitor");
+  }
+
+  @Test
+  void optionalJobIdReturnsJobIdWhenPresent() {
+    assertThat(AnakinApiClient.optionalJobId(Map.of("job_id", "wj-1"))).isEqualTo("wj-1");
+  }
+
+  @Test
+  void optionalJobIdReturnsNullWhenAbsent() {
+    assertThat(AnakinApiClient.optionalJobId(Map.of("status", "completed", "data", Map.of())))
+        .isNull();
+  }
+
+  @Test
+  void pollUntilTerminalWithCustomTimeoutTreatsTimedOutAsTerminal() throws Exception {
+    server.createContext("/ai/jobs/wf-1", exchange -> writeJson(exchange, 200, "{\"status\":\"timed_out\"}"));
+    server.start();
+
+    AnakinApiClient client = new AnakinApiClient("test-key", baseUrl);
+    Map<String, Object> result = client.pollUntilTerminal("/ai/jobs/wf-1", Duration.ofMinutes(1));
+
+    assertThat(result.get("status")).isEqualTo("timed_out");
+  }
+
+  @Test
+  void pollUntilTerminalWithPredicateStopsOnCallerDefinedTerminalState() throws Exception {
+    AtomicInteger callCount = new AtomicInteger(0);
+    server.createContext("/ai-visibility/search/sv-1", exchange -> {
+      int call = callCount.incrementAndGet();
+      String status = call < 2 ? "running" : "completed";
+      writeJson(exchange, 200, "{\"status\":\"" + status + "\"}");
+    });
+    server.start();
+
+    AnakinApiClient client = new AnakinApiClient("test-key", baseUrl);
+    Map<String, Object> result = client.pollUntilTerminal(
+        "/ai-visibility/search/sv-1", Duration.ofMinutes(1), status -> !"running".equals(status));
+
+    assertThat(result.get("status")).isEqualTo("completed");
+    assertThat(callCount.get()).isEqualTo(2);
   }
 
   private static void writeJson(HttpExchange exchange, int status, String json) throws IOException {

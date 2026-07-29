@@ -1,0 +1,463 @@
+{
+  "$schema" : "https://unpkg.com/@camunda/zeebe-element-templates-json-schema/resources/schema.json",
+  "name" : "Anakin - Create Monitor",
+  "id" : "io.anakin.connector.MonitorCreate.v1",
+  "description" : "Create a scheduled website monitor with Anakin (https://anakin.io) -- checks a URL/site/Wire action on a schedule and records changes, optionally alerting a webhook or email.",
+  "metadata" : {
+    "keywords" : [ ]
+  },
+  "documentationRef" : "https://anakin.io/docs",
+  "version" : 1,
+  "category" : {
+    "id" : "connectors",
+    "name" : "Connectors"
+  },
+  "appliesTo" : [ "bpmn:Task" ],
+  "elementType" : {
+    "value" : "bpmn:ServiceTask"
+  },
+  "engines" : {
+    "camunda" : "^8.9"
+  },
+  "groups" : [ {
+    "id" : "authentication",
+    "label" : "Authentication"
+  }, {
+    "id" : "target",
+    "label" : "Target"
+  }, {
+    "id" : "watch",
+    "label" : "Watch settings"
+  }, {
+    "id" : "fetch",
+    "label" : "Fetch settings"
+  }, {
+    "id" : "schedule",
+    "label" : "Schedule"
+  }, {
+    "id" : "alerts",
+    "label" : "Alerts"
+  }, {
+    "id" : "site",
+    "label" : "Site scope (optional)"
+  }, {
+    "id" : "wire",
+    "label" : "Wire scope (optional)"
+  }, {
+    "id" : "connector",
+    "label" : "Connector"
+  }, {
+    "id" : "output",
+    "label" : "Output mapping"
+  }, {
+    "id" : "error",
+    "label" : "Error handling"
+  }, {
+    "id" : "retries",
+    "label" : "Retries"
+  } ],
+  "properties" : [ {
+    "value" : "io.anakin:monitor-create:1",
+    "binding" : {
+      "property" : "type",
+      "type" : "zeebe:taskDefinition"
+    },
+    "type" : "Hidden"
+  }, {
+    "id" : "apiKey",
+    "label" : "Anakin API Key",
+    "description" : "Paste a secret reference, e.g. <code>{{secrets.ANAKIN_API_KEY}}</code>, rather than a raw key. Get a free key (300 credits, no card required) at anakin.io/dashboard.",
+    "optional" : false,
+    "constraints" : {
+      "notEmpty" : true
+    },
+    "feel" : "optional",
+    "group" : "authentication",
+    "binding" : {
+      "name" : "apiKey",
+      "type" : "zeebe:input"
+    },
+    "type" : "String"
+  }, {
+    "id" : "url",
+    "label" : "URL",
+    "description" : "The URL to watch (root URL for site scope; the Wire site's URL for wire scope).",
+    "optional" : false,
+    "constraints" : {
+      "notEmpty" : true
+    },
+    "feel" : "optional",
+    "group" : "target",
+    "binding" : {
+      "name" : "url",
+      "type" : "zeebe:input"
+    },
+    "type" : "String"
+  }, {
+    "id" : "intervalMinutes",
+    "label" : "Interval (minutes)",
+    "description" : "Check frequency in minutes. Minimum 15.",
+    "optional" : false,
+    "constraints" : {
+      "notEmpty" : true
+    },
+    "feel" : "static",
+    "group" : "target",
+    "binding" : {
+      "name" : "intervalMinutes",
+      "type" : "zeebe:input"
+    },
+    "type" : "Number"
+  }, {
+    "id" : "scope",
+    "label" : "Scope",
+    "description" : "What to monitor: \"page\" (default), \"site\", or \"wire\".",
+    "optional" : true,
+    "value" : "page",
+    "feel" : "optional",
+    "group" : "target",
+    "binding" : {
+      "name" : "scope",
+      "type" : "zeebe:input"
+    },
+    "type" : "String"
+  }, {
+    "id" : "watchMode",
+    "label" : "Watch Mode",
+    "description" : "\"full_page\" (2 credits/check, compares the whole page) or \"specific_data\" (3 credits/check, extracts only the Output Schema fields with AI). Defaults to full_page.",
+    "optional" : true,
+    "value" : "full_page",
+    "feel" : "optional",
+    "group" : "watch",
+    "binding" : {
+      "name" : "watchMode",
+      "type" : "zeebe:input"
+    },
+    "type" : "String"
+  }, {
+    "id" : "watchFormat",
+    "label" : "Watch Format",
+    "description" : "Format compared in full_page mode: markdown, html, or cleaned_html. Defaults to markdown.",
+    "optional" : true,
+    "value" : "markdown",
+    "feel" : "optional",
+    "group" : "watch",
+    "binding" : {
+      "name" : "watchFormat",
+      "type" : "zeebe:input"
+    },
+    "type" : "String"
+  }, {
+    "id" : "outputSchema",
+    "label" : "Output Schema (JSON Schema)",
+    "description" : "JSON Schema of the fields to track. Required when Watch Mode is specific_data. FEEL context expression.",
+    "optional" : true,
+    "feel" : "optional",
+    "group" : "watch",
+    "binding" : {
+      "name" : "outputSchema",
+      "type" : "zeebe:input"
+    },
+    "type" : "String"
+  }, {
+    "id" : "aiMode",
+    "label" : "AI Mode",
+    "description" : "AI meaningful-change filtering: ignores trivial noise (ads, timestamps) and summarizes real changes. +1 credit per check.",
+    "optional" : true,
+    "value" : false,
+    "feel" : "static",
+    "group" : "watch",
+    "binding" : {
+      "name" : "aiMode",
+      "type" : "zeebe:input"
+    },
+    "type" : "Boolean"
+  }, {
+    "id" : "aiGoal",
+    "label" : "AI Goal",
+    "description" : "Natural-language description of which changes count as meaningful (used with AI Mode), e.g. \"only when the price drops or it goes out of stock\".",
+    "optional" : true,
+    "feel" : "optional",
+    "group" : "watch",
+    "binding" : {
+      "name" : "aiGoal",
+      "type" : "zeebe:input"
+    },
+    "type" : "String"
+  }, {
+    "id" : "useBrowser",
+    "label" : "Use Browser",
+    "description" : "Render checks with a stealth headless browser (needed for JS-heavy pages). Forced true server-side when Session ID is set.",
+    "optional" : true,
+    "value" : false,
+    "feel" : "static",
+    "group" : "fetch",
+    "binding" : {
+      "name" : "useBrowser",
+      "type" : "zeebe:input"
+    },
+    "type" : "Boolean"
+  }, {
+    "id" : "country",
+    "label" : "Country",
+    "description" : "Two-letter proxy country code. Defaults to \"us\".",
+    "optional" : true,
+    "value" : "us",
+    "feel" : "optional",
+    "group" : "fetch",
+    "binding" : {
+      "name" : "country",
+      "type" : "zeebe:input"
+    },
+    "type" : "String"
+  }, {
+    "id" : "sessionId",
+    "label" : "Session ID",
+    "description" : "Saved browser-session ID for monitoring login-protected pages (see Session List).",
+    "optional" : true,
+    "feel" : "optional",
+    "group" : "fetch",
+    "binding" : {
+      "name" : "sessionId",
+      "type" : "zeebe:input"
+    },
+    "type" : "String"
+  }, {
+    "id" : "isActive",
+    "label" : "Active",
+    "description" : "Start running immediately. Defaults to true.",
+    "optional" : true,
+    "value" : true,
+    "feel" : "static",
+    "group" : "schedule",
+    "binding" : {
+      "name" : "isActive",
+      "type" : "zeebe:input"
+    },
+    "type" : "Boolean"
+  }, {
+    "id" : "expiresAt",
+    "label" : "Expires At",
+    "description" : "Optional end date (ISO 8601 timestamp or YYYY-MM-DD); the monitor auto-pauses when it passes.",
+    "optional" : true,
+    "feel" : "optional",
+    "group" : "schedule",
+    "binding" : {
+      "name" : "expiresAt",
+      "type" : "zeebe:input"
+    },
+    "type" : "String"
+  }, {
+    "id" : "alertWebhookUrl",
+    "label" : "Alert Webhook URL",
+    "description" : "Webhook URL that receives signed change alerts.",
+    "optional" : true,
+    "feel" : "optional",
+    "group" : "alerts",
+    "binding" : {
+      "name" : "alertWebhookUrl",
+      "type" : "zeebe:input"
+    },
+    "type" : "String"
+  }, {
+    "id" : "alertEmails",
+    "label" : "Alert Emails",
+    "description" : "Comma-separated email recipients for change alerts.",
+    "optional" : true,
+    "feel" : "optional",
+    "group" : "alerts",
+    "binding" : {
+      "name" : "alertEmails",
+      "type" : "zeebe:input"
+    },
+    "type" : "String"
+  }, {
+    "id" : "maxPages",
+    "label" : "Max Pages",
+    "description" : "Site scope: max pages crawled per run.",
+    "optional" : true,
+    "feel" : "static",
+    "group" : "site",
+    "binding" : {
+      "name" : "maxPages",
+      "type" : "zeebe:input"
+    },
+    "type" : "Number"
+  }, {
+    "id" : "maxDepth",
+    "label" : "Max Depth",
+    "description" : "Site scope: crawl depth (1-5). Defaults to 2.",
+    "optional" : true,
+    "feel" : "static",
+    "group" : "site",
+    "binding" : {
+      "name" : "maxDepth",
+      "type" : "zeebe:input"
+    },
+    "type" : "Number"
+  }, {
+    "id" : "includePatterns",
+    "label" : "Include Patterns",
+    "description" : "Site scope: glob patterns or hand-picked same-site URLs to track. FEEL list expression.",
+    "optional" : true,
+    "feel" : "optional",
+    "group" : "site",
+    "binding" : {
+      "name" : "includePatterns",
+      "type" : "zeebe:input"
+    },
+    "type" : "String"
+  }, {
+    "id" : "excludePatterns",
+    "label" : "Exclude Patterns",
+    "description" : "Site scope: glob patterns to skip. FEEL list expression.",
+    "optional" : true,
+    "feel" : "optional",
+    "group" : "site",
+    "binding" : {
+      "name" : "excludePatterns",
+      "type" : "zeebe:input"
+    },
+    "type" : "String"
+  }, {
+    "id" : "wireActionId",
+    "label" : "Wire Action ID",
+    "description" : "Wire scope (required there): the Wire action run each check, e.g. \"amazon.search_products\" (see Wire Discover).",
+    "optional" : true,
+    "feel" : "optional",
+    "group" : "wire",
+    "binding" : {
+      "name" : "wireActionId",
+      "type" : "zeebe:input"
+    },
+    "type" : "String"
+  }, {
+    "id" : "wireCatalogSlug",
+    "label" : "Wire Catalog Slug",
+    "description" : "Wire scope: catalog slug of the Wire site.",
+    "optional" : true,
+    "feel" : "optional",
+    "group" : "wire",
+    "binding" : {
+      "name" : "wireCatalogSlug",
+      "type" : "zeebe:input"
+    },
+    "type" : "String"
+  }, {
+    "id" : "wireCredentialId",
+    "label" : "Wire Credential ID",
+    "description" : "Wire scope: credential ID when the action needs auth (see Wire Identities).",
+    "optional" : true,
+    "feel" : "optional",
+    "group" : "wire",
+    "binding" : {
+      "name" : "wireCredentialId",
+      "type" : "zeebe:input"
+    },
+    "type" : "String"
+  }, {
+    "id" : "wireParams",
+    "label" : "Wire Params",
+    "description" : "Wire scope: parameters passed to the action each check. FEEL context expression.",
+    "optional" : true,
+    "feel" : "optional",
+    "group" : "wire",
+    "binding" : {
+      "name" : "wireParams",
+      "type" : "zeebe:input"
+    },
+    "type" : "String"
+  }, {
+    "id" : "wireWatchPaths",
+    "label" : "Wire Watch Paths",
+    "description" : "Wire scope: JSON paths to diff instead of the whole response. FEEL list expression.",
+    "optional" : true,
+    "feel" : "optional",
+    "group" : "wire",
+    "binding" : {
+      "name" : "wireWatchPaths",
+      "type" : "zeebe:input"
+    },
+    "type" : "String"
+  }, {
+    "id" : "version",
+    "label" : "Version",
+    "description" : "Version of the element template",
+    "value" : "1",
+    "group" : "connector",
+    "binding" : {
+      "key" : "elementTemplateVersion",
+      "type" : "zeebe:taskHeader"
+    },
+    "type" : "Hidden"
+  }, {
+    "id" : "id",
+    "label" : "ID",
+    "description" : "ID of the element template",
+    "value" : "io.anakin.connector.MonitorCreate.v1",
+    "group" : "connector",
+    "binding" : {
+      "key" : "elementTemplateId",
+      "type" : "zeebe:taskHeader"
+    },
+    "type" : "Hidden"
+  }, {
+    "id" : "resultVariable",
+    "label" : "Result variable",
+    "description" : "Name of variable to store the response in",
+    "group" : "output",
+    "binding" : {
+      "key" : "resultVariable",
+      "type" : "zeebe:taskHeader"
+    },
+    "type" : "String"
+  }, {
+    "id" : "resultExpression",
+    "label" : "Result expression",
+    "description" : "Expression to map the response into process variables",
+    "feel" : "required",
+    "group" : "output",
+    "binding" : {
+      "key" : "resultExpression",
+      "type" : "zeebe:taskHeader"
+    },
+    "type" : "Text"
+  }, {
+    "id" : "errorExpression",
+    "label" : "Error expression",
+    "description" : "Expression to handle errors. Details in the <a href=\"https://docs.camunda.io/docs/components/connectors/use-connectors/\" target=\"_blank\">documentation</a>.",
+    "feel" : "required",
+    "group" : "error",
+    "binding" : {
+      "key" : "errorExpression",
+      "type" : "zeebe:taskHeader"
+    },
+    "type" : "Text"
+  }, {
+    "id" : "retryCount",
+    "label" : "Retries",
+    "description" : "Number of retries",
+    "value" : "3",
+    "feel" : "optional",
+    "group" : "retries",
+    "binding" : {
+      "property" : "retries",
+      "type" : "zeebe:taskDefinition"
+    },
+    "type" : "String"
+  }, {
+    "id" : "retryBackoff",
+    "label" : "Retry backoff",
+    "description" : "ISO-8601 duration to wait between retries",
+    "value" : "PT0S",
+    "group" : "retries",
+    "binding" : {
+      "key" : "retryBackoff",
+      "type" : "zeebe:taskHeader"
+    },
+    "type" : "String"
+  } ],
+  "icon" : {
+    "contents" : "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxOCAxOCIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4Ij4KICA8cmVjdCB3aWR0aD0iMTgiIGhlaWdodD0iMTgiIHJ4PSIzIiBmaWxsPSIjNmIzZmEwIi8+CiAgPHRleHQgeD0iOSIgeT0iMTMiIGZvbnQtZmFtaWx5PSJIZWx2ZXRpY2EsIEFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjEwIiBmb250LXdlaWdodD0iNzAwIiBmaWxsPSIjZmZmZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5BPC90ZXh0Pgo8L3N2Zz4K"
+  }
+}

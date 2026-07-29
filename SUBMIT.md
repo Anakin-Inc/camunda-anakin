@@ -2,11 +2,15 @@
 
 Real Camunda 8 Outbound Connectors (Java, Maven), targeting `api.anakin.io/v1`,
 built against the real open-source [Camunda Connector
-SDK](https://github.com/camunda/connectors) (`io.camunda.connector:*`).
+SDK](https://github.com/camunda/connectors) (`io.camunda.connector:*`). Covers
+all 21 of Anakin's REST API capabilities as 21 separate connectors -- the
+first 3 (`url-scraper`/`search`/`agentic-search`) from the original build
+session, the remaining 18 added in a later session (see "Extension to all 21
+capabilities" below).
 Distinct from a marketplace/directory PR -- there is no central "submit your
 connector" registry the way there is for, e.g., Dagster's
 `community-integrations` repo. The deliverable here is the connector jar plus
-its source and the three generated element templates, deployed into
+its source and the 21 generated element templates, deployed into
 whichever Connector Runtime a Camunda 8 operator already runs (self-managed
 Docker image, or the Spring Boot connector-runtime starter).
 
@@ -200,20 +204,191 @@ across this directory said "500 credits"; the real Anakin free-tier grant is
 credits copy was already corrected to "300 credits" by the time this session
 inspected it -- left as-is, not this session's fix to claim.)
 
+## Extension to all 21 capabilities (this session)
+
+This directory originally covered 3 of Anakin's 21 REST API capabilities
+(`scrape`/`url-scraper`, `search`, `agentic_search`). This session added the
+remaining 18 as 18 more `OutboundConnectorFunction` classes + element
+templates, following the exact conventions above (same package structure,
+same `AnakinApiClient`-backed plumbing, same test pattern), so the directory
+now covers all 21: `map`, `crawl`, `wire_discover`, `wire_catalog`,
+`wire_read_action`, `wire_write_action`, `wire_identities`, `wire_login`,
+`wire_build`, `monitor_create`, `monitor_list`, `monitor_changes`,
+`monitor_control`, `ai_visibility_search`, `ai_visibility_sources`,
+`session_list`, `session_delete`, `browser_task`.
+
+**Ground truth for all 18**, read directly from Anakin's own MCP server
+source (`anakin-mcp/src/client.ts` and `anakin-mcp/src/tools/*.ts`), not
+guessed or inferred -- the same standard the original 3 connectors were held
+to. Endpoint paths, HTTP verbs, request field names/defaults, and response
+shapes (`job_id` vs `jobId` vs `id`, `search_id`, `workflow_id`, nested
+`WireJobError { code, message, ... }` vs a flat error string, etc.) were all
+cross-checked against that source before being written into Java.
+
+### New shared plumbing added to `AnakinApiClient`
+
+The original client only had `post`/`get`/`pollUntilTerminal` (fixed
+`"completed"`/`"failed"` terminal states) -- not enough for the 18 new
+endpoints' actual surface, so four real additions were made, each because a
+specific new connector genuinely needed it, not speculatively:
+
+- **`delete(String path)`** -- `session_delete` and `monitor_control`'s
+  `delete` action are the only two endpoints in scope that use `DELETE`.
+- **`withQuery(String path, Map<String,String> params)`** -- query-string
+  builder mirroring `client.ts`'s own `withQuery` helper (same
+  drop-if-empty-or-null semantics), needed by `wire_discover`,
+  `wire_identities`, and `session_list`, which take optional filters as
+  query params rather than a request body.
+- **`encodePathSegment(String segment)`** -- path-segment URL-encoding
+  (`URLEncoder` corrected from `+`-for-space form encoding to the
+  path-correct `%20`) for slugs/ids interpolated into path templates
+  (`wire/catalog/:slug`, `monitors/:id`, `sessions/:id`, `wire/jobs/:jobId`,
+  `ai-visibility/search/:search_id`, `ai/jobs/:workflowId`) -- mirrors
+  `encodeURIComponent` used throughout `client.ts` for the same purpose.
+- **`pollUntilTerminal(path, timeout)` and `pollUntilTerminal(path, timeout,
+  Predicate<Object> isTerminal)` overloads**, plus `"timed_out"` added to the
+  default terminal-state set -- two real, distinct polling behaviors in the
+  new endpoints that the original single-timeout/two-literal-status method
+  couldn't express: (1) `browser_task`'s poll endpoint can report
+  `"timed_out"` as a status distinct from `"failed"`, and the real API
+  hard-caps a run at ~330s server-side, wider than the original 5-minute
+  `POLL_TIMEOUT` default -- so a dedicated `BROWSER_TASK_POLL_TIMEOUT`
+  (6 minutes) constant and timeout-parameterized overload were added; (2)
+  `ai_visibility_search`'s poll endpoint is terminal on **any** status other
+  than `"running"` (per `client.ts`: `if (search.status !== 'running')
+  return search`), not a fixed `{"completed","failed"}` set, so a
+  predicate-parameterized overload was added rather than special-casing a
+  third literal value into the shared default.
+
+### A real defect caught and fixed this session: reserved property id collision
+
+Every element template the generator produces auto-injects standard
+properties (`version`, **`id`** -- bound to `zeebe:taskHeader
+elementTemplateId` -- `resultVariable`, `resultExpression`,
+`errorExpression`, `retryCount`, `retryBackoff`) alongside the
+`@TemplateProperty`-derived ones. The first draft of four new request
+records (`MonitorListRequest`, `MonitorChangesRequest`,
+`MonitorControlRequest`, `SessionDeleteRequest`) used a record component
+literally named `id` for the monitor/session id being operated on -- the
+natural, ground-truth-faithful name, since that is exactly what `client.ts`
+calls it. Running `mvn package` failed for real:
+`Failed to generate element templates: duplicate property id` -- the
+generator derives each `@TemplateProperty`'s JSON property id from the Java
+field name, so a field named `id` collided with the framework's own
+reserved `"id": "id"` property. Fixed by renaming the four fields to
+`monitorId` (three files) / `sessionId` (one file) -- the wire-format REST
+paths (`/monitors/:id`, `/sessions/:id`) are unaffected, since those are
+built by string concatenation inside each connector's `execute()`, not
+derived from the Java field name. This is a real, previously-undocumented
+constraint of `element-template-generator-maven-plugin` 8.9.6, caught by
+actually running `mvn package` on all 18 new connectors, not discoverable
+from the annotation Javadoc alone.
+
+### Other design choices specific to the new connectors
+
+- **`monitor_create` only sends fields the BPMN process actually set**,
+  not the `@TemplateProperty` default values shown in Camunda Modeler for
+  its ~20 optional fields -- matching `AnakinClient.monitorCreate`'s own
+  "only send fields the caller set" behavior in `client.ts` (the API applies
+  its own server-side defaults, e.g. `scope: "page"`, for anything omitted).
+  This is a deliberate divergence from every other connector in this
+  project (which do apply their own client-side defaults in `execute()`),
+  documented in `MonitorCreateConnectorFunction`'s Javadoc so it doesn't
+  read as an inconsistency.
+- **`wire_read_action` / `wire_write_action`** are two separate connector
+  classes with byte-for-byte identical request records
+  (`WireReadActionRequest`/`WireWriteActionRequest`), mirroring the real MCP
+  tool's own split (`wireReadActionTool`/`wireWriteActionTool` in
+  `wire.ts`) -- its header comment explains why: a BPMN modeler picking an
+  element should be visibly choosing a read (safe) vs. write
+  (state-changing) action, not passing a hidden mode flag into one shared
+  element. Both submit to the same `POST /wire/task` and poll the same
+  `GET /wire/jobs/:jobId` only when the response carries a `job_id`
+  (`AnakinApiClient.optionalJobId`, new) -- some Wire actions answer
+  synchronously with terminal `data` inline.
+- **Not reimplemented: the real MCP tool's `financialBlockReason` guard**
+  (`anakin-mcp/src/tools/policy.ts`), which refuses `wire_write_action` /
+  `wire_build` calls that look like a payment or fund transfer. That guard
+  is Anthropic Connectors-Directory-specific policy layered on top of the
+  REST API for an autonomous LLM agent loop, not part of the Anakin API
+  contract this project wraps -- out of scope per the task brief's "ground
+  truth is the REST API" framing, and noted here rather than silently
+  dropped. Documented in `WireWriteActionConnectorFunction`'s Javadoc.
+- **`wire_build`'s connector does not poll.** The real API returns
+  `status: "pending"` from `POST /wire/build-request` and there is no
+  documented `GET /wire/build-request/:id` in the ground-truth source given
+  for this task (`client.ts`'s `wireBuild` doesn't poll either) -- so this
+  connector's `execute()` returns the submit response directly, not
+  invented as a polling loop against an endpoint that isn't confirmed to
+  exist.
+
+### Verified, not assumed (this session's addition)
+
+- **`mvn clean package` succeeds for real** with all 21 connectors:
+  compiles 62 main-source files (21 connector classes + 21 request records +
+  `AnakinApiClient` + `WireErrors`, `--release 21`), runs **72 JUnit 5
+  tests across 22 test classes** (17 in `AnakinApiClientTest` -- 9 original
+  + 8 new, covering `delete`/`withQuery`/`encodePathSegment`/
+  `optionalJobId`/the two new `pollUntilTerminal` overloads -- plus 1-4 per
+  connector test class), assembles `target/camunda-anakin-1.0.0.jar`, and
+  regenerates all 21 `element-templates/*.json` files:
+  `BUILD SUCCESS`, `Tests run: 72, Failures: 0, Errors: 0, Skipped: 0`.
+- Verified the shaded jar's contents with `jar tf`: 21 connector classes,
+  21 model classes, `AnakinApiClient` (+ its inner exception class and one
+  synthetic lambda class), `WireErrors`, the SPI file (now listing all 21
+  FQCNs), `icon.svg`, and standard `META-INF/maven/*` metadata -- still no
+  `connector-core`/`connector-validation`/
+  `element-template-generator-annotations`/`jackson-databind`/`slf4j-api`
+  bundled (all correctly excluded as `provided`), confirming the expanded
+  connector set didn't regress the classloader-conflict-avoidance property
+  the original 3-connector build established.
+- **All 21 generated `element-templates/*.json` files** verified valid JSON
+  (`python3 -m json.tool`, all 21) and spot-checked for internal
+  consistency (`python3` property-id de-duplication check across the four
+  most property-dense new templates: `anakin-monitor-create.json` (33
+  properties), `anakin-wire-read-action.json`, `anakin-session-delete.json`,
+  `anakin-browser-task.json` -- zero duplicate property ids in any of the
+  21, confirming the `monitorId`/`sessionId` rename fix above actually
+  resolved the collision project-wide, not just for the one file that first
+  failed).
+- **`pom.xml` re-validated as well-formed XML after this session's edits**
+  (`python3 -c "import xml.dom.minidom; xml.dom.minidom.parse('pom.xml')"`)
+  and re-scanned programmatically for the same class of defect the original
+  session hit (a stray `--` inside an XML comment body) -- zero violations
+  in the 18 new `<connector>` blocks added to the
+  `element-template-generator-maven-plugin` configuration (they're plain
+  tags with no prose comments, so the risk surface for that specific defect
+  class didn't reappear here).
+
+### Not verified / not done (this session's addition, in the same spirit as the section below)
+
+- Same caveats as the original 3-connector build apply to all 18 new ones:
+  never deployed to a real Camunda 8 Connector Runtime, never called the
+  real `api.anakin.io`, `engineVersion = "^8.9"` is still an inference, and
+  `icon.svg` is still the same generic placeholder.
+- `monitor_control`'s client-side `action` validation (`pause`/`resume`/
+  `run_now`/`delete`) throws `ConnectorException("ANAKIN_INVALID_INPUT", ...)`
+  for any other value -- this error code is new to this session and not
+  documented anywhere the real Anakin API or Camunda SDK defines; it's this
+  connector's own invention for a purely client-side guard (the request
+  never reaches the API in that case), analogous to how the original
+  `ANAKIN_JOB_FAILED`/`ANAKIN_API_ERROR` codes are this project's own
+  convention, not values Anakin itself returns.
+- The `financialBlockReason` guard gap noted above.
+
 ## What's here
 
 ```
-pom.xml                                   Maven build: connector-core/-validation/element-template-generator-annotations (provided), jackson-databind/slf4j-api (provided, explicit -- see below), maven-shade-plugin, element-template-generator-maven-plugin
-src/main/java/.../AnakinApiClient.java    Plain-Java HTTP client shared by all 3 connectors: X-API-Key header, JSON (de)serialization, bounded blocking poll
-src/main/java/.../UrlScraperConnectorFunction.java     POST /url-scraper + poll GET /url-scraper/:jobId
-src/main/java/.../SearchConnectorFunction.java         POST /search (synchronous, no polling)
-src/main/java/.../AgenticSearchConnectorFunction.java  POST /agentic-search + poll GET /agentic-search/:jobId
-src/main/java/.../model/*.java            Request records with @TemplateProperty annotations (element-template source of truth)
-src/main/resources/META-INF/services/io.camunda.connector.api.outbound.OutboundConnectorFunction   SPI file, 3 FQCNs
+pom.xml                                   Maven build: connector-core/-validation/element-template-generator-annotations (provided), jackson-databind/slf4j-api (provided, explicit -- see below), maven-shade-plugin, element-template-generator-maven-plugin, 21 <connector> blocks
+src/main/java/.../AnakinApiClient.java    Plain-Java HTTP client shared by all 21 connectors: X-API-Key header, JSON (de)serialization, query-string/path-segment encoding, bounded blocking poll (fixed and predicate-based terminal states)
+src/main/java/.../WireErrors.java         Shared error-message extraction for Wire's structured {code, message, ...} job-error shape (used by the two Wire action connectors only)
+src/main/java/.../*ConnectorFunction.java 21 connector classes, one per Anakin capability (url-scraper, search, agentic-search, map, crawl, wire x7, monitor x4, ai-visibility x2, sessions x2, browser-task)
+src/main/java/.../model/*.java            21 request records with @TemplateProperty annotations (element-template source of truth)
+src/main/resources/META-INF/services/io.camunda.connector.api.outbound.OutboundConnectorFunction   SPI file, 21 FQCNs
 src/main/resources/icon.svg               Generic placeholder icon -- NOT Anakin's real brand mark (see below)
-src/test/java/.../AnakinApiClientTest.java             9 JUnit 5 tests against a local com.sun.net.httpserver mock
-src/test/java/.../*ConnectorFunctionTest.java          9 more tests (3 per connector) using the SDK's own OutboundConnectorContextBuilder against the same local mock -- exercises real secret substitution, real Bean Validation, real bindVariables()
-element-templates/*.json                  Maven build output (element-template-generator-maven-plugin), regenerated by `mvn package` -- do not hand-edit
+src/test/java/.../AnakinApiClientTest.java             17 JUnit 5 tests against a local com.sun.net.httpserver mock (9 original + 8 covering this session's new client methods)
+src/test/java/.../*ConnectorFunctionTest.java          21 more test classes (1-4 tests each, 55 total) using the SDK's own OutboundConnectorContextBuilder against the same local mock -- exercises real secret substitution, real Bean Validation, real bindVariables()
+element-templates/*.json                  Maven build output (element-template-generator-maven-plugin), regenerated by `mvn package` -- do not hand-edit, 21 files
 ```
 
 Request bodies (`{url, formats=['markdown'], country='us', useBrowser=false,
